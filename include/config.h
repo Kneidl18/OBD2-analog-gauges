@@ -63,9 +63,9 @@
 #define OBD2_INIT_DELAY_MS      500         // Delay between initialization commands
 
 // --- Diagnostic Button Configuration ---
-#define DIAGNOSTIC_BUTTON_PIN   21          // GPIO pin for diagnostic mode button
-#define BUTTON_DEBOUNCE_MS      50          // Button debounce time in milliseconds
-#define BUTTON_LONG_PRESS_MS    1000        // Long press duration for mode exit
+#define DIAGNOSTIC_BUTTON_PIN   21          // GPIO pin for diagnostic mode button (connect to GND, uses internal pull-up)
+#define BUTTON_DEBOUNCE_MS      50          // Button debounce time in milliseconds (prevents false triggers)
+#define BUTTON_LONG_PRESS_MS    1000        // Long press duration for mode exit (1 second hold to exit diagnostic mode)
 
 // ============================================================================
 // SENSOR CONFIGURATION
