@@ -62,6 +62,11 @@
 #define OBD2_RETRY_COUNT        3           // Number of retries for failed commands
 #define OBD2_INIT_DELAY_MS      500         // Delay between initialization commands
 
+// --- Diagnostic Button Configuration ---
+#define DIAGNOSTIC_BUTTON_PIN   21          // GPIO pin for diagnostic mode button
+#define BUTTON_DEBOUNCE_MS      50          // Button debounce time in milliseconds
+#define BUTTON_LONG_PRESS_MS    1000        // Long press duration for mode exit
+
 // ============================================================================
 // SENSOR CONFIGURATION
 // ============================================================================
@@ -309,5 +314,48 @@
     #define TEST_CONNECTION_MSG     "DISPLAY TEST MODE"
     #define TEST_ENABLE_DEBUG       true        // Enable debug output for test mode
 #endif
+
+// ============================================================================
+// OBD2 DIAGNOSTIC SCANNER CONFIGURATION
+// ============================================================================
+
+// --- Diagnostic Mode Settings ---
+#define DIAGNOSTIC_SCROLL_INTERVAL  3000    // Time to display each PID (ms)
+#define DIAGNOSTIC_MAX_PIDS         50      // Maximum number of PIDs to scan
+#define DIAGNOSTIC_LINES_PER_SCREEN 8       // Number of text lines per screen
+#define DIAGNOSTIC_TEXT_SIZE        2       // Text size for diagnostic display
+
+// --- Common OBD2 PIDs for Diagnostic Scanning ---
+// Engine Data PIDs
+#define PID_ENGINE_RPM              "010C"  // Engine RPM
+#define PID_VEHICLE_SPEED           "010D"  // Vehicle Speed
+#define PID_THROTTLE_POSITION       "0111"  // Throttle Position
+#define PID_ENGINE_LOAD             "0104"  // Calculated Engine Load
+#define PID_FUEL_LEVEL              "012F"  // Fuel Tank Level Input
+#define PID_FUEL_PRESSURE           "010A"  // Fuel Pressure
+#define PID_INTAKE_TEMP             "010F"  // Intake Air Temperature
+#define PID_MAF_FLOW_RATE           "0110"  // Mass Air Flow Rate
+#define PID_TIMING_ADVANCE          "010E"  // Timing Advance
+#define PID_BAROMETRIC_PRESSURE     "0133"  // Barometric Pressure
+
+// Emissions PIDs
+#define PID_O2_SENSOR_1             "0114"  // Oxygen Sensor 1
+#define PID_O2_SENSOR_2             "0115"  // Oxygen Sensor 2
+#define PID_SHORT_FUEL_TRIM_1       "0106"  // Short Term Fuel Trim Bank 1
+#define PID_LONG_FUEL_TRIM_1        "0107"  // Long Term Fuel Trim Bank 1
+#define PID_SHORT_FUEL_TRIM_2       "0108"  // Short Term Fuel Trim Bank 2
+#define PID_LONG_FUEL_TRIM_2        "0109"  // Long Term Fuel Trim Bank 2
+
+// System PIDs
+#define PID_RUNTIME_SINCE_START     "011F"  // Runtime Since Engine Start
+#define PID_DISTANCE_WITH_MIL       "0121"  // Distance Traveled with MIL On
+#define PID_FUEL_RAIL_PRESSURE      "0123"  // Fuel Rail Pressure
+#define PID_COMMANDED_EGR           "012C"  // Commanded EGR
+#define PID_EGR_ERROR               "012D"  // EGR Error
+
+// PID Support Detection (used for discovery)
+#define PID_SUPPORTED_01_20         "0100"  // PIDs supported 01-20
+#define PID_SUPPORTED_21_40         "0120"  // PIDs supported 21-40
+#define PID_SUPPORTED_41_60         "0140"  // PIDs supported 41-60
 
 #endif // CONFIG_H

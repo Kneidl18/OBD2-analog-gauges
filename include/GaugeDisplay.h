@@ -9,6 +9,7 @@
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
+#include <vector>
 #include "SensorData.h"
 
 /**
@@ -71,6 +72,18 @@ public:
      * @param brightness Brightness level (0-255)
      */
     static void setBrightness(uint8_t brightness);
+
+    /**
+     * @brief Display diagnostic text data
+     * @param diagnosticData Vector of diagnostic strings to display
+     * @param currentIndex Current index for scrolling
+     */
+    void showDiagnosticData(const std::vector<String>& diagnosticData, int currentIndex);
+
+    /**
+     * @brief Show diagnostic mode header
+     */
+    void showDiagnosticHeader();
 
     /**
      * @brief Draw battery voltage display

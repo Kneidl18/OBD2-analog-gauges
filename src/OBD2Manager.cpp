@@ -336,3 +336,209 @@ float OBD2Manager::parseBatteryVoltage(const String& response) {
 
     return voltage;
 }
+
+std::vector<String> OBD2Manager::discoverSupportedPIDs() {
+    std::vector<String> supportedPIDs;
+
+    if (currentState != OBD2State::READY) {
+        #if DEBUG_ENABLED
+        Serial.println("OBD2 not ready for PID discovery");
+        #endif
+        return supportedPIDs;
+    }
+
+    #if DEBUG_ENABLED
+    Serial.println("Starting PID discovery...");
+    #endif
+
+    // Check PIDs 01-20
+    sendCommand(PID_SUPPORTED_01_20);
+    String response = readResponse(RESPONSE_TIMEOUT);
+    if (isValidResponse(response)) {
+        parseSupportedPIDs(response, 0x01, supportedPIDs);
+    }
+
+    delay(200);
+
+    // Check PIDs 21-40
+    sendCommand(PID_SUPPORTED_21_40);
+    response = readResponse(RESPONSE_TIMEOUT);
+    if (isValidResponse(response)) {
+        parseSupportedPIDs(response, 0x21, supportedPIDs);
+    }
+
+    delay(200);
+
+    // Check PIDs 41-60
+    sendCommand(PID_SUPPORTED_41_60);
+    response = readResponse(RESPONSE_TIMEOUT);
+    if (isValidResponse(response)) {
+        parseSupportedPIDs(response, 0x41, supportedPIDs);
+    }
+
+    #if DEBUG_ENABLED
+    Serial.printf("PID discovery complete. Found %d supported PIDs\n", supportedPIDs.size());
+    #endif
+
+    return supportedPIDs;
+}
+
+String OBD2Manager::getDiagnosticData(const String& pid) {
+    if (currentState != OBD2State::READY) {
+        return "OBD2 Not Ready";
+    }
+
+    sendCommand(pid);
+    delay(100);
+    String response = readResponse(2000);
+
+    if (!isValidResponse(response)) {
+        return getPIDName(pid) + ": No Response";
+    }
+
+    // Parse the response based on PID type
+    String value = parsePIDValue(pid, response);
+    return getPIDName(pid) + ": " + value;
+}
+
+std::vector<String> OBD2Manager::getAllDiagnosticData() {
+    std::vector<String> diagnosticData;
+
+    // Common PIDs to check
+    String commonPIDs[] = {
+        PID_ENGINE_RPM, PID_VEHICLE_SPEED, PID_THROTTLE_POSITION,
+        PID_ENGINE_LOAD, PID_FUEL_LEVEL, PID_INTAKE_TEMP,
+        PID_MAF_FLOW_RATE, PID_TIMING_ADVANCE, PID_FUEL_PRESSURE,
+        TEMP_PID, BOOST_PID, PID_SHORT_FUEL_TRIM_1, PID_LONG_FUEL_TRIM_1,
+        PID_O2_SENSOR_1, PID_RUNTIME_SINCE_START
+    };
+
+    int numPIDs = sizeof(commonPIDs) / sizeof(commonPIDs[0]);
+
+    for (int i = 0; i < numPIDs && i < DIAGNOSTIC_MAX_PIDS; i++) {
+        String data = getDiagnosticData(commonPIDs[i]);
+        diagnosticData.push_back(data);
+        delay(150); // Small delay between requests
+    }
+
+    // Add battery voltage
+    float voltage = requestBatteryVoltage();
+    if (voltage > 0) {
+        diagnosticData.push_back("Battery Voltage: " + String(voltage, 2) + "V");
+    }
+
+    return diagnosticData;
+}
+
+void OBD2Manager::parseSupportedPIDs(const String& response, int startPID, std::vector<String>& supportedPIDs) {
+    // Parse the 4-byte response to determine which PIDs are supported
+    // Each bit represents a PID (1 = supported, 0 = not supported)
+
+    if (response.length() < 8) return; // Need at least 4 bytes (8 hex chars)
+
+    // Extract the hex data (skip the first 4 characters which are the PID echo)
+    String hexData = response.substring(4);
+    hexData.replace(" ", ""); // Remove spaces
+
+    if (hexData.length() < 8) return;
+
+    // Convert hex string to 4 bytes
+    for (int byteIndex = 0; byteIndex < 4; byteIndex++) {
+        String byteStr = hexData.substring(byteIndex * 2, byteIndex * 2 + 2);
+        int byteValue = strtol(byteStr.c_str(), NULL, 16);
+
+        // Check each bit in the byte
+        for (int bit = 7; bit >= 0; bit--) {
+            if (byteValue & (1 << bit)) {
+                int pidNumber = startPID + (byteIndex * 8) + (7 - bit);
+                String pidStr = String(pidNumber, HEX);
+                if (pidStr.length() == 1) pidStr = "0" + pidStr;
+                pidStr.toUpperCase();
+                pidStr = "01" + pidStr;
+                supportedPIDs.push_back(pidStr);
+            }
+        }
+    }
+}
+
+String OBD2Manager::getPIDName(const String& pid) {
+    // Return human-readable names for common PIDs
+    if (pid == PID_ENGINE_RPM) return "Engine RPM";
+    if (pid == PID_VEHICLE_SPEED) return "Vehicle Speed";
+    if (pid == PID_THROTTLE_POSITION) return "Throttle Position";
+    if (pid == PID_ENGINE_LOAD) return "Engine Load";
+    if (pid == PID_FUEL_LEVEL) return "Fuel Level";
+    if (pid == PID_INTAKE_TEMP) return "Intake Air Temp";
+    if (pid == PID_MAF_FLOW_RATE) return "MAF Flow Rate";
+    if (pid == PID_TIMING_ADVANCE) return "Timing Advance";
+    if (pid == PID_FUEL_PRESSURE) return "Fuel Pressure";
+    if (pid == TEMP_PID) return "Coolant Temp";
+    if (pid == BOOST_PID) return "Intake Pressure";
+    if (pid == PID_SHORT_FUEL_TRIM_1) return "Short Fuel Trim 1";
+    if (pid == PID_LONG_FUEL_TRIM_1) return "Long Fuel Trim 1";
+    if (pid == PID_O2_SENSOR_1) return "O2 Sensor 1";
+    if (pid == PID_RUNTIME_SINCE_START) return "Runtime";
+    if (pid == PID_BAROMETRIC_PRESSURE) return "Barometric Press";
+
+    return "PID " + pid; // Default name
+}
+
+String OBD2Manager::parsePIDValue(const String& pid, const String& response) {
+    // Parse response based on PID type
+    if (response.length() < 6) return "Invalid";
+
+    // Extract data bytes (skip PID echo)
+    String dataStr = response.substring(4);
+    dataStr.replace(" ", "");
+
+    if (pid == PID_ENGINE_RPM) {
+        if (dataStr.length() >= 4) {
+            int a = strtol(dataStr.substring(0, 2).c_str(), NULL, 16);
+            int b = strtol(dataStr.substring(2, 4).c_str(), NULL, 16);
+            int rpm = ((a * 256) + b) / 4;
+            return String(rpm) + " RPM";
+        }
+    }
+    else if (pid == PID_VEHICLE_SPEED) {
+        if (dataStr.length() >= 2) {
+            int speed = strtol(dataStr.substring(0, 2).c_str(), NULL, 16);
+            return String(speed) + " km/h";
+        }
+    }
+    else if (pid == PID_THROTTLE_POSITION) {
+        if (dataStr.length() >= 2) {
+            int throttle = strtol(dataStr.substring(0, 2).c_str(), NULL, 16);
+            float percent = (throttle * 100.0) / 255.0;
+            return String(percent, 1) + "%";
+        }
+    }
+    else if (pid == PID_ENGINE_LOAD) {
+        if (dataStr.length() >= 2) {
+            int load = strtol(dataStr.substring(0, 2).c_str(), NULL, 16);
+            float percent = (load * 100.0) / 255.0;
+            return String(percent, 1) + "%";
+        }
+    }
+    else if (pid == PID_FUEL_LEVEL) {
+        if (dataStr.length() >= 2) {
+            int fuel = strtol(dataStr.substring(0, 2).c_str(), NULL, 16);
+            float percent = (fuel * 100.0) / 255.0;
+            return String(percent, 1) + "%";
+        }
+    }
+    else if (pid == TEMP_PID) {
+        if (dataStr.length() >= 2) {
+            int temp = strtol(dataStr.substring(0, 2).c_str(), NULL, 16);
+            return String(temp - 40) + "°C";
+        }
+    }
+    else if (pid == BOOST_PID) {
+        if (dataStr.length() >= 2) {
+            int pressure = strtol(dataStr.substring(0, 2).c_str(), NULL, 16);
+            return String(pressure) + " kPa";
+        }
+    }
+
+    // Default: show raw hex data
+    return dataStr;
+}

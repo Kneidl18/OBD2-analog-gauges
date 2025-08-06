@@ -9,6 +9,7 @@
 
 #include <Arduino.h>
 #include <BluetoothSerial.h>
+#include <vector>
 #include "SensorData.h"
 
 /**
@@ -86,6 +87,25 @@ public:
      */
     String getStatusString() const;
 
+    /**
+     * @brief Discover supported PIDs from the vehicle
+     * @return Vector of supported PID strings
+     */
+    std::vector<String> discoverSupportedPIDs();
+
+    /**
+     * @brief Get diagnostic data for a specific PID
+     * @param pid PID string (e.g., "010C")
+     * @return Formatted string with PID name and value
+     */
+    String getDiagnosticData(const String& pid);
+
+    /**
+     * @brief Get all available diagnostic data
+     * @return Vector of formatted diagnostic strings
+     */
+    std::vector<String> getAllDiagnosticData();
+
 private:
     BluetoothSerial serialBT;           ///< Bluetooth Serial interface
     String deviceName;                  ///< Bluetooth device name
@@ -141,6 +161,29 @@ private:
      * @return True if valid
      */
     static bool isValidResponse(const String& response);
+
+    /**
+     * @brief Parse supported PIDs from response
+     * @param response Raw OBD2 response
+     * @param startPID Starting PID number for this range
+     * @param supportedPIDs Vector to store supported PID strings
+     */
+    void parseSupportedPIDs(const String& response, int startPID, std::vector<String>& supportedPIDs);
+
+    /**
+     * @brief Get human-readable name for a PID
+     * @param pid PID string
+     * @return Human-readable name
+     */
+    String getPIDName(const String& pid);
+
+    /**
+     * @brief Parse PID value from response
+     * @param pid PID string
+     * @param response Raw OBD2 response
+     * @return Formatted value string
+     */
+    String parsePIDValue(const String& pid, const String& response);
 
     // Constants
     static constexpr unsigned long INIT_COMMAND_DELAY = 500;  ///< Delay between init commands

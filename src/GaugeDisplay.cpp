@@ -268,3 +268,78 @@ void GaugeDisplay::drawBatteryVoltage(const SensorData& data) {
     // Reset text color to default
     tft.setTextColor(COLOR_TEXT);
 }
+
+void GaugeDisplay::showDiagnosticData(const std::vector<String>& diagnosticData, int currentIndex) {
+    if (!initialized || diagnosticData.empty()) return;
+
+    // Clear the display area below header
+    tft.fillRect(0, 40, SCREEN_WIDTH, SCREEN_HEIGHT - 40, COLOR_BACKGROUND);
+
+    // Calculate how many items to show per screen
+    int itemsPerScreen = DIAGNOSTIC_LINES_PER_SCREEN;
+    int startIndex = (currentIndex / itemsPerScreen) * itemsPerScreen;
+    int endIndex = min(startIndex + itemsPerScreen, (int)diagnosticData.size());
+
+    // Set text properties
+    tft.setTextSize(DIAGNOSTIC_TEXT_SIZE);
+    tft.setTextColor(COLOR_TEXT);
+
+    int yPos = 50; // Start below header
+    int lineHeight = 25; // Height per line
+
+    // Display diagnostic items
+    for (int i = startIndex; i < endIndex; i++) {
+        // Highlight current item
+        if (i == currentIndex) {
+            tft.fillRect(0, yPos - 2, SCREEN_WIDTH, lineHeight, TFT_DARKGREY);
+            tft.setTextColor(TFT_YELLOW);
+        } else {
+            tft.setTextColor(COLOR_TEXT);
+        }
+
+        // Truncate long strings to fit screen
+        String displayText = diagnosticData[i];
+        if (displayText.length() > 18) { // Adjust based on text size and screen width
+            displayText = displayText.substring(0, 15) + "...";
+        }
+
+        tft.drawString(displayText, 5, yPos);
+        yPos += lineHeight;
+    }
+
+    // Show navigation info at bottom
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_LIGHTGREY);
+    String navInfo = "Item " + String(currentIndex + 1) + "/" + String(diagnosticData.size());
+    navInfo += " | Press: Next | Hold: Exit";
+
+    // Split navigation info if too long
+    if (navInfo.length() > 35) {
+        String line1 = "Item " + String(currentIndex + 1) + "/" + String(diagnosticData.size());
+        String line2 = "Press: Next | Hold: Exit";
+        tft.drawString(line1, 5, SCREEN_HEIGHT - 25);
+        tft.drawString(line2, 5, SCREEN_HEIGHT - 15);
+    } else {
+        tft.drawString(navInfo, 5, SCREEN_HEIGHT - 15);
+    }
+}
+
+void GaugeDisplay::showDiagnosticHeader() {
+    if (!initialized) return;
+
+    // Clear header area
+    tft.fillRect(0, 0, SCREEN_WIDTH, 40, COLOR_BACKGROUND);
+
+    // Draw header
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_CYAN);
+    tft.drawString("OBD2 DIAGNOSTICS", 10, 5);
+
+    // Draw separator line
+    tft.drawLine(0, 35, SCREEN_WIDTH, 35, TFT_WHITE);
+
+    // Show status
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_GREEN);
+    tft.drawString("Scanning vehicle parameters...", 5, 25);
+}

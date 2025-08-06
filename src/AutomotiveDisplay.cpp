@@ -11,7 +11,9 @@ AutomotiveDisplay::AutomotiveDisplay()
     : currentState(AppState::INITIALIZING), lastUpdate(0), lastStateCheck(0),
       testTemperature(0), testPressure(0), testVoltage(0),
       testTempIncreasing(true), testPressureIncreasing(true), testVoltageIncreasing(true),
-      lastTempUpdate(0), lastPressureUpdate(0), lastVoltageUpdate(0), lastStatusUpdate(0)
+      lastTempUpdate(0), lastPressureUpdate(0), lastVoltageUpdate(0), lastStatusUpdate(0),
+      diagnosticModeActive(false), buttonPressTime(0), lastButtonCheck(0),
+      lastButtonState(false), diagnosticStartTime(0), currentDiagnosticIndex(0)
 {
 #ifdef DISPLAY_TEST
     testTemperature = TEST_TEMP_MIN;
@@ -36,6 +38,10 @@ bool AutomotiveDisplay::begin() {
         currentState = AppState::ERROR;
         return false;
     }
+
+    // Initialize diagnostic button
+    pinMode(DIAGNOSTIC_BUTTON_PIN, INPUT_PULLUP);
+    DEBUG_PRINTLN("Diagnostic button initialized on pin " + String(DIAGNOSTIC_BUTTON_PIN));
 
 #ifdef DISPLAY_TEST
     // In display test mode, skip OBD2 initialization
@@ -72,9 +78,14 @@ bool AutomotiveDisplay::begin() {
 void AutomotiveDisplay::update() {
     unsigned long currentTime = millis();
 
+    // Handle diagnostic button press (always check, regardless of mode)
+    handleDiagnosticButton();
+
 #ifdef DISPLAY_TEST
     // In display test mode, run test simulation
-    updateDisplayTest();
+    if (!diagnosticModeActive) {
+        updateDisplayTest();
+    }
 #else
     // Update OBD2 manager state
     obd2Manager.update();
@@ -89,8 +100,14 @@ void AutomotiveDisplay::update() {
     if (currentTime - lastUpdate >= UPDATE_INTERVAL) {
         switch (currentState) {
             case AppState::RUNNING:
-                updateSensorData();
-                updateDisplay();
+                if (!diagnosticModeActive) {
+                    updateSensorData();
+                    updateDisplay();
+                }
+                break;
+
+            case AppState::DIAGNOSTIC_MODE:
+                updateDiagnosticMode();
                 break;
 
             case AppState::WAITING_BT:
@@ -325,3 +342,108 @@ void AutomotiveDisplay::generateTestData() {
     }
 }
 #endif
+
+void AutomotiveDisplay::handleDiagnosticButton() {
+    unsigned long currentTime = millis();
+
+    // Check button state with debouncing
+    if (currentTime - lastButtonCheck >= BUTTON_DEBOUNCE_MS) {
+        bool currentButtonState = isButtonPressed();
+
+        // Button press detected (falling edge)
+        if (currentButtonState && !lastButtonState) {
+            buttonPressTime = currentTime;
+            DEBUG_PRINTLN("Diagnostic button pressed");
+        }
+
+        // Button release detected (rising edge)
+        if (!currentButtonState && lastButtonState) {
+            unsigned long pressDuration = currentTime - buttonPressTime;
+
+            if (diagnosticModeActive) {
+                // In diagnostic mode: short press = next PID, long press = exit
+                if (pressDuration >= BUTTON_LONG_PRESS_MS) {
+                    DEBUG_PRINTLN("Long press detected - exiting diagnostic mode");
+                    exitDiagnosticMode();
+                } else {
+                    DEBUG_PRINTLN("Short press detected - next diagnostic item");
+                    currentDiagnosticIndex++;
+                }
+            } else {
+                // Not in diagnostic mode: any press enters diagnostic mode
+                if (pressDuration >= BUTTON_DEBOUNCE_MS) {
+                    DEBUG_PRINTLN("Entering diagnostic mode");
+                    enterDiagnosticMode();
+                }
+            }
+        }
+
+        lastButtonState = currentButtonState;
+        lastButtonCheck = currentTime;
+    }
+}
+
+bool AutomotiveDisplay::isButtonPressed() {
+    return digitalRead(DIAGNOSTIC_BUTTON_PIN) == LOW; // Assuming active low with pullup
+}
+
+void AutomotiveDisplay::enterDiagnosticMode() {
+    if (currentState == AppState::RUNNING || currentState == AppState::WAITING_BT) {
+        diagnosticModeActive = true;
+        currentState = AppState::DIAGNOSTIC_MODE;
+        diagnosticStartTime = millis();
+        currentDiagnosticIndex = 0;
+
+        gaugeDisplay.clear();
+        gaugeDisplay.showDiagnosticHeader();
+
+        DEBUG_PRINTLN("Diagnostic mode activated");
+    }
+}
+
+void AutomotiveDisplay::exitDiagnosticMode() {
+    diagnosticModeActive = false;
+    currentDiagnosticIndex = 0;
+
+    // Return to previous state
+    if (obd2Manager.isReady()) {
+        currentState = AppState::RUNNING;
+    } else if (obd2Manager.isConnected()) {
+        currentState = AppState::CONNECTING_OBD2;
+    } else {
+        currentState = AppState::WAITING_BT;
+    }
+
+    gaugeDisplay.clear();
+    DEBUG_PRINTLN("Diagnostic mode deactivated");
+}
+
+void AutomotiveDisplay::updateDiagnosticMode() {
+    if (!diagnosticModeActive || !obd2Manager.isReady()) {
+        gaugeDisplay.showStatus("OBD2 not ready for diagnostics");
+        return;
+    }
+
+    // Get all diagnostic data
+    std::vector<String> diagnosticData = obd2Manager.getAllDiagnosticData();
+
+    if (diagnosticData.empty()) {
+        gaugeDisplay.showStatus("No diagnostic data available");
+        return;
+    }
+
+    // Wrap around if index exceeds available data
+    if (currentDiagnosticIndex >= diagnosticData.size()) {
+        currentDiagnosticIndex = 0;
+    }
+
+    // Display current diagnostic data
+    gaugeDisplay.showDiagnosticData(diagnosticData, currentDiagnosticIndex);
+
+    // Auto-advance every few seconds if no button press
+    unsigned long currentTime = millis();
+    if (currentTime - diagnosticStartTime >= DIAGNOSTIC_SCROLL_INTERVAL) {
+        currentDiagnosticIndex++;
+        diagnosticStartTime = currentTime;
+    }
+}

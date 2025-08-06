@@ -20,6 +20,7 @@ enum class AppState {
     WAITING_BT,       ///< Waiting for Bluetooth connection
     CONNECTING_OBD2,  ///< Connecting to OBD2 interface
     RUNNING,          ///< Normal operation
+    DIAGNOSTIC_MODE,  ///< Diagnostic scanner mode
     ERROR             ///< Error state
 };
 
@@ -106,6 +107,32 @@ private:
      */
     void generateTestData();
 
+    /**
+     * @brief Handle diagnostic button press
+     */
+    void handleDiagnosticButton();
+
+    /**
+     * @brief Enter diagnostic scanner mode
+     */
+    void enterDiagnosticMode();
+
+    /**
+     * @brief Exit diagnostic scanner mode
+     */
+    void exitDiagnosticMode();
+
+    /**
+     * @brief Update diagnostic display
+     */
+    void updateDiagnosticMode();
+
+    /**
+     * @brief Check button state with debouncing
+     * @return True if button is pressed (debounced)
+     */
+    bool isButtonPressed();
+
     // Display test state variables (only used when DISPLAY_TEST is defined)
     float testTemperature;           ///< Current test temperature
     float testPressure;              ///< Current test pressure
@@ -117,6 +144,14 @@ private:
     unsigned long lastPressureUpdate; ///< Last pressure update time
     unsigned long lastVoltageUpdate; ///< Last voltage update time
     unsigned long lastStatusUpdate;  ///< Last status message update time
+
+    // Diagnostic mode state variables
+    bool diagnosticModeActive;       ///< Whether diagnostic mode is active
+    unsigned long buttonPressTime;   ///< Time when button was first pressed
+    unsigned long lastButtonCheck;   ///< Last time button was checked
+    bool lastButtonState;            ///< Previous button state for debouncing
+    unsigned long diagnosticStartTime; ///< When diagnostic mode started
+    int currentDiagnosticIndex;      ///< Current PID index being displayed
 
     // Configuration constants
     static constexpr unsigned long UPDATE_INTERVAL = 2000;      ///< Sensor update interval (ms)
